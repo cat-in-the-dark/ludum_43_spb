@@ -42,7 +42,7 @@ Player = {
   rigid=true,
   mass=true,
   state=ST.STAND,
-  dir=R,
+  dir=DIR.R,
   anim={tick=0,speed=0.13,sp={
     [ST.STAND]=make_anim(280, 2, 3, 1),
     [ST.RUN]=make_anim(272, 2, 3, 4),
@@ -54,14 +54,14 @@ Player = {
 Corpse = {
   x=0,
   y=0,
-  cr={x=0,y=0,w=32,h=14},
+  cr={x=0,y=11,w=24,h=13},
   vx=0,
   vy=0,
   rigid=true,
   mass=true,
   state=ST.STAND,
   anim={tick=0,speed=0.1,sp={
-    [ST.STAND]=make_anim(336,4,2,3)
+    [ST.STAND]=make_anim(320,3,3,3)
   }}
 }
 
@@ -69,7 +69,7 @@ JMP_IMP=2.8
 ACCEL=0.2
 OVERJMP_ACC=0.1
 
-cam={x=W//2,y=9}
+cam={x=W//2,y=0}
 
 solid_sprites_index = 80
 
@@ -155,8 +155,8 @@ function drawEnt(e,cam)
 end
 
 function collide(e1,e2)
-  return (e1.x < e2.x+e2.cr.w and e2.x < e1.x + e1.cr.w) and
-    (e1.y < e2.y+e2.cr.h and e2.y < e1.y+e1.cr.h)
+  return (e1.x+e1.cr.x < e2.x+e2.cr.x+e2.cr.w and e2.x+e2.cr.x < e1.x+e1.cr.x+e1.cr.w) and
+    (e1.y+e1.cr.y < e2.y+e2.cr.y+e2.cr.h and e2.y+e2.cr.y < e1.y+e1.cr.y+e1.cr.h)
 end
 
 function handleInput()
@@ -190,23 +190,26 @@ function collideTile(dp,cr,callback)
   end
 end
 
-function CanMove(dp,cr)
+function CanMove(dp,e)
   local cm=true
-  collideTile(dp,cr, function(c,r)
+  collideTile(dp,e.cr, function(c,r)
     if IsTileSolid(c, r) then
       cm=false
       return
     end
   end)
+  for i,en in ipairs(entities) do
+    if e ~= en and collide({x=dp.x,y=dp.y,cr=e.cr},en) then return false end
+  end
   return cm
 end
 
 function isOnFloor(e)
-  return not CanMove(vec2(e.x,e.y+1),e.cr) and e.vy >= 0
+  return not CanMove(vec2(e.x,e.y+1),e) and e.vy >= 0
 end
 
 function isUnderCeiling(e)
-  return not CanMove(vec2(e.x,e.y-1),e.cr)
+  return not CanMove(vec2(e.x,e.y-1),e)
 end
 
 function TryMoveBy(e,dp)
@@ -216,14 +219,14 @@ function TryMoveBy(e,dp)
     for i=0,math.ceil(dp.y),sign(dp.y) do
       if dx == 0 then
         for j=0,math.ceil(dp.x),sign(dp.x) do
-          if CanMove(vec2(e.x+j,e.y+i),e.cr) and dp.x~=0 then
+          if CanMove(vec2(e.x+j,e.y+i),e) and dp.x~=0 then
             dx=j
           else
             break
           end
         end
       end
-      if CanMove(vec2(e.x+dx,e.y+i),e.cr) and dp.y ~= 0 then
+      if CanMove(vec2(e.x+dx,e.y+i),e) and dp.y ~= 0 then
         dy=i
       end
       if dp.y==0 then break end
@@ -296,6 +299,7 @@ function init()
   Player.y = 10
   Corpse.x = 50
   Corpse.y = 10
+  entities = {Player, Corpse}
 end
 
 init()
