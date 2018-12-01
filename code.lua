@@ -14,39 +14,55 @@ DIR={
 }
 
 -- animation helpers
+function make_tex(c0,w,h)
+  tex={}
+  for i=1,h do
+    tex[i]={}
+    for j=1,w do
+      tex[i][j]=c0 + (j-1) + (i-1)*16
+    end
+  end
+  return tex
+end
+
 function make_anim(c0,w,h,count)
   anim = {}
   for i=1,count do
-    anim[i] = {}
-    for j=1,h do
-      anim[i][j]={}
-      for k=1,w do
-        anim[i][j][k]=c0 + (k-1) + (j-1)*16 + (i-1)*w
-      end
-    end
+    anim[i] = make_tex(c0 + (i-1)*w, w, h)
   end
   return anim
 end
 
-ANIM_TICK=0
-ANIM_SPEED=0.13
-PL_ANIM={
-  [ST.STAND]=make_anim(264, 2, 4, 1),
-  [ST.RUN]=make_anim(256, 2, 4, 4),
-  [ST.JUMP]=make_anim(268, 2, 4, 1)
-}
-
 Player = {
   x=0,
   y=0,
-  cr={x=1,y=0,w=14,h=32},
+  cr={x=1,y=0,w=14,h=24},
   vx=0,
   vy=0,
   rigid=true,
   mass=true,
   state=ST.STAND,
   dir=R,
-  sp=PL_ANIM[ST.STAND][1]
+  anim={tick=0,speed=0.13,sp={
+    [ST.STAND]=make_anim(280, 2, 3, 1),
+    [ST.RUN]=make_anim(272, 2, 3, 4),
+    [ST.JUMP]=make_anim(284, 2, 3, 1)
+  }},
+  ctrl=true
+}
+
+Corpse = {
+  x=0,
+  y=0,
+  cr={x=0,y=0,w=32,h=14},
+  vx=0,
+  vy=0,
+  rigid=true,
+  mass=true,
+  state=ST.STAND,
+  anim={tick=0,speed=0.1,sp={
+    [ST.STAND]=make_anim(336,4,2,3)
+  }}
 }
 
 JMP_IMP=2.8
@@ -118,10 +134,10 @@ function IsTileSolid(x, y)
   return (tileId >= solid_sprites_index)
 end
 
-function animate(e,tex)
-  local anim=tex[e.state]
-  e.sp=anim[(math.floor(ANIM_TICK)%#anim)+1]
-  ANIM_TICK = ANIM_TICK + ANIM_SPEED
+function animate(e)
+  local anim=e.anim.sp[e.state]
+  e.sp=anim[(math.floor(e.anim.tick)%#anim)+1]
+  e.anim.tick = e.anim.tick+e.anim.speed
 end
 
 function drawEnt(e,cam)
@@ -222,6 +238,9 @@ end
 
 function update(e)
   local iv=handleInput()
+  if e.ctrl == nil then
+    iv={pos=vec2(0,0), jump=false}
+  end
   if (e.mass) then
     if isOnFloor(e) then
       if iv.jump then
@@ -237,9 +256,7 @@ function update(e)
       e.vy = e.vy+ACCEL
     end
   end
-  if e.vx ~= 0 then
 
-  end
   e.vx=iv.pos.x
   local dp=vec2(e.vx, e.vy)
   TryMoveBy(e,dp)
@@ -277,6 +294,8 @@ end
 function init()
   Player.x = 10
   Player.y = 10
+  Corpse.x = 50
+  Corpse.y = 10
 end
 
 init()
@@ -284,8 +303,11 @@ function TIC()
   cls()
   updateCam(cam, Player)
   update(Player)
+  update(Corpse)
   updateState(Player)
   drawMap(Player, cam)
-  animate(Player,PL_ANIM)
+  animate(Player)
+  animate(Corpse)
   drawEnt(Player, cam)
+  drawEnt(Corpse, cam)
 end
