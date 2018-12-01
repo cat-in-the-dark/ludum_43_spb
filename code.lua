@@ -3,12 +3,14 @@ W=240
 H=136
 
 ST={
-  SL=1,
-  SR=2,
-  RL=3,
-  RR=4,
-  JL=5,
-  JR=6
+  STAND=1,
+  RUN=2,
+  JUMP=3
+}
+
+DIR={
+  L=1,
+  R=2
 }
 
 -- animation helpers
@@ -29,12 +31,9 @@ end
 ANIM_TICK=0
 ANIM_SPEED=0.13
 PL_ANIM={
-  [ST.SL]={{{256,257},{272,273},{288,289},{304,305}}},
-  [ST.SR]=make_anim(264, 2, 4, 1),
-  [ST.RL]={{{256,257},{272,273},{288,289},{304,305}}},
-  [ST.RR]=make_anim(256, 2, 4, 4),
-  [ST.JL]={{{256,257},{272,273},{288,289},{304,305}}},
-  [ST.JR]={{{256,257},{272,273},{288,289},{304,305}}}
+  [ST.STAND]=make_anim(264, 2, 4, 1),
+  [ST.RUN]=make_anim(256, 2, 4, 4),
+  [ST.JUMP]=make_anim(268, 2, 4, 1)
 }
 
 Player = {
@@ -45,8 +44,9 @@ Player = {
   vy=0,
   rigid=true,
   mass=true,
-  state=ST.SR,
-  sp=PL_ANIM[ST.SR][1]
+  state=ST.STAND,
+  dir=R,
+  sp=PL_ANIM[ST.STAND][1]
 }
 
 JMP_IMP=2.8
@@ -113,10 +113,6 @@ function btno(id)
   end
 end
 
-function faceRight(state)
-  return state == ST.SR or state == ST.JR or state == ST.RR
-end
-
 function IsTileSolid(x, y)
   tileId = mget(x, y)
   return (tileId >= solid_sprites_index)
@@ -132,7 +128,12 @@ function drawEnt(e,cam)
   local i=1
   for i,t in ipairs(e.sp) do
     for j,v in ipairs(t) do
-      spr(v, e.x+(j-1)*T+cam.x, e.y+(i-1)*T+cam.y, 0)
+      if e.dir == nil or e.dir == DIR.R then
+        spr(v, e.x+(j-1)*T+cam.x, e.y+(i-1)*T+cam.y, 0)
+      else
+        tlen = #t
+        spr(v, e.x+(tlen-j)*T+cam.x, e.y+(i-1)*T+cam.y, 0, 1, 1)
+      end
     end
   end
 end
@@ -245,30 +246,19 @@ function update(e)
 end
 
 function updateState(e)
-  if e.vx > 0 then
-    if isOnFloor(e) then
-      e.state=ST.RR
-    else
-      e.state=ST.JR
-    end
-  elseif e.vx < 0 then
-    if isOnFloor(e) then
-      e.state=ST.RL
-    else
-      e.state=ST.JL
-    end
-  elseif faceRight(e.state) then
-    if isOnFloor(e) then
-      e.state=ST.SR
-    else
-      e.state=ST.JR
-    end
+  if e.vx ~= 0 then
+    e.state = ST.RUN
   else
-    if isOnFloor(e) then
-      e.state=ST.SL
-    else
-      e.state=ST.JL
-    end
+    e.state = ST.STAND
+  end
+  if not isOnFloor(e) then
+    e.state=ST.JUMP
+  end
+
+  if e.vx > 0 then
+    e.dir = DIR.R
+  elseif e.vx < 0 then
+    e.dir = DIR.L
   end
 end
 
