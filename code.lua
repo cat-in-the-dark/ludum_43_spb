@@ -59,10 +59,8 @@ Corpse = {
   vy=0,
   rigid=true,
   mass=true,
-  state=ST.STAND,
-  anim={tick=0,speed=0.1,sp={
-    [ST.STAND]=make_anim(320,3,3,3)
-  }}
+  grabbable=true,
+  anim={tick=0,speed=0.1,sp=make_anim(320,3,3,3)}
 }
 
 JMP_IMP=2.8
@@ -71,7 +69,10 @@ OVERJMP_ACC=0.1
 
 cam={x=W//2,y=0}
 
+-- tile types
 solid_sprites_index = 80
+spikeFirst=32
+spikeLast=32
 
 BTN_UP=0
 BTN_LEFT=2
@@ -95,6 +96,21 @@ function v2add(v1, v2)
 end
 
 function sign(x) return x>0 and 1 or x<0 and -1 or 0 end
+
+function deepcopy(orig)
+  local orig_type = type(orig)
+  local copy
+  if orig_type == 'table' then
+    copy = {}
+    for orig_key, orig_value in next, orig, nil do
+      copy[deepcopy(orig_key)] = deepcopy(orig_value)
+    end
+    setmetatable(copy, deepcopy(getmetatable(orig)))
+  else -- number, string, boolean, etc
+    copy = orig
+  end
+  return copy
+end
 
 -- buttons state
 btn_st={
@@ -129,13 +145,20 @@ function btno(id)
   end
 end
 
+-- tile helpers
 function IsTileSolid(x, y)
   tileId = mget(x, y)
   return (tileId >= solid_sprites_index)
 end
 
+function isTileSpike(x,y)
+  id = mget(x,y)
+  return id>=spikeFirst and id <=spikeLast
+end
+
 function animate(e)
-  local anim=e.anim.sp[e.state]
+  local anim=e.anim.sp
+  if e.state ~= nil then anim=e.anim.sp[e.state] end
   e.sp=anim[(math.floor(e.anim.tick)%#anim)+1]
   e.anim.tick = e.anim.tick+e.anim.speed
 end
@@ -155,7 +178,8 @@ function drawEnt(e,cam)
 end
 
 function collide(e1,e2)
-  return (e1.x+e1.cr.x < e2.x+e2.cr.x+e2.cr.w and e2.x+e2.cr.x < e1.x+e1.cr.x+e1.cr.w) and
+  return e2.rigid and
+    (e1.x+e1.cr.x < e2.x+e2.cr.x+e2.cr.w and e2.x+e2.cr.x < e1.x+e1.cr.x+e1.cr.w) and
     (e1.y+e1.cr.y < e2.y+e2.cr.y+e2.cr.h and e2.y+e2.cr.y < e1.y+e1.cr.y+e1.cr.h)
 end
 
@@ -212,6 +236,14 @@ function isUnderCeiling(e)
   return not CanMove(vec2(e.x,e.y-1),e)
 end
 
+function isTouchSpikeTiles(e)
+  ts=false
+  collideTile(vec2(e.x,e.y),e.cr,function(c,r)
+    if isTileSpike(c,r) then ts=true end
+  end)
+  return ts
+end
+
 function TryMoveBy(e,dp)
   local pos=vec2(e.x, e.y)
   if (e.rigid) then
@@ -240,11 +272,10 @@ function TryMoveBy(e,dp)
 end
 
 function update(e)
-  local iv=handleInput()
-  if e.ctrl == nil then
-    iv={pos=vec2(0,0), jump=false}
-  end
-  if (e.mass) then
+  if e.grab_by ~= nil then return end
+  local iv={pos=vec2(0,0), jump=false}
+  if e.ctrl ~= nil then iv=handleInput() end
+  if e.mass then
     if isOnFloor(e) then
       if iv.jump then
         e.vy=-1*JMP_IMP
@@ -262,7 +293,18 @@ function update(e)
 
   e.vx=iv.pos.x
   local dp=vec2(e.vx, e.vy)
-  TryMoveBy(e,dp)
+  if e.grabbed ~= nil then
+    gr=e.grabbed
+    if (dp.x < 0 and e.x < gr.x) or (dp.x > 0 and e.x > gr.x) then
+      TryMoveBy(e,dp)
+      TryMoveBy(gr,dp)
+    else
+      TryMoveBy(gr,dp)
+      TryMoveBy(e,dp)
+    end
+  else
+    TryMoveBy(e,dp)
+  end
 end
 
 function updateState(e)
@@ -289,12 +331,42 @@ end
 
 crx, cry = 0, 0
 function drawMap(e,cam)
-  map(crx,cry,30,17,crx*8+cam.x,cry*8+cam.y,-1,1, function(tile, x, y)
+  map(crx,cry,60,34,crx*8+cam.x,cry*8+cam.y,-1,1, function(tile, x, y)
     return tile
   end)
 end
 
-function init()
+function grab_object(e)
+  if btn(BTN_Z) then
+    local cr_grab = {x=e.cr.x-1, y=e.cr.y, w=e.cr.w+2, h=e.cr.h}
+    local e_gr = {x=e.x, y=e.y, cr=cr_grab}
+    for i,en in ipairs(entities) do
+      if (collide(e_gr, en)) and en.grabbable and en ~= e then
+        if e.grabbed ~= nil then e.grabbed.grab_by = nil end
+        e.grabbed = en
+        en.grab_by = e
+        return
+      end
+    end
+  end
+  if e.grabbed ~= nil then
+    e.grabbed.grab_by = nil
+    e.grabbed = nil
+  end
+end
+
+function initFail()
+end
+
+function TICFail()
+  cls()
+  local string="YOU LOOSE"
+  local w=print(string,0,-6)
+  print(string,(W-w)//2,(H-6)//2)
+  if btn(BTN_Z) then mode=MOD_GAME end
+end
+
+function initGame()
   Player.x = 10
   Player.y = 10
   Corpse.x = 50
@@ -302,16 +374,48 @@ function init()
   entities = {Player, Corpse}
 end
 
-init()
-function TIC()
+function TICGame()
   cls()
   updateCam(cam, Player)
+  updateState(Player)
   update(Player)
   update(Corpse)
-  updateState(Player)
   drawMap(Player, cam)
   animate(Player)
   animate(Corpse)
   drawEnt(Player, cam)
   drawEnt(Corpse, cam)
+  grab_object(Player)
+  if isTouchSpikeTiles(Player) then mode=MOD_FAIL end
+  if Player.grabbed ~= nil then print("grabbed", 10, 10, 8) end
+  if Corpse.grab_by ~= nil then print("is grabbed", 10, 18, 8) end
+end
+
+-- game modes
+MOD_GAME=1
+MOD_FAIL=2
+
+TICMode={
+  [MOD_GAME]=TICGame,
+  [MOD_FAIL]=TICFail
+}
+
+inits={
+  [MOD_GAME]=initGame,
+  [MOD_FAIL]=initFail
+}
+
+function init()
+  mode = MOD_GAME
+end
+
+init()
+function TIC()
+  if oldMode == nil or oldMode ~= mode then
+    if inits[mode] ~= nil then
+      inits[mode]()
+    end
+    oldMode=mode
+  end
+  TICMode[mode]()
 end
