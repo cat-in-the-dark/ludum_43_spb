@@ -2,10 +2,15 @@ T=8
 W=240
 H=136
 
+SPAWNX=10
+SPAWNY=10
+
 ST={
   STAND=1,
   RUN=2,
-  JUMP=3
+  JUMP=3,
+  DIE=4,
+  DEAD=5
 }
 
 DIR={
@@ -46,7 +51,9 @@ Player = {
   anim={tick=0,speed=0.13,sp={
     [ST.STAND]=make_anim(280, 2, 3, 1),
     [ST.RUN]=make_anim(272, 2, 3, 4),
-    [ST.JUMP]=make_anim(284, 2, 3, 1)
+    [ST.JUMP]=make_anim(284, 2, 3, 1),
+    [ST.DIE]=make_anim(286,2,3,1),
+    [ST.DEAD]=make_anim(286,2,3,1)
   }},
   ctrl=true
 }
@@ -110,6 +117,12 @@ function deepcopy(orig)
     copy = orig
   end
   return copy
+end
+
+function removeFrom(tab,obj)
+  for i = #tab, 1, -1 do
+    if tab[i] == obj then table.remove(tab, i) end
+  end
 end
 
 -- buttons state
@@ -271,10 +284,14 @@ function TryMoveBy(e,dp)
   end
 end
 
+function die(e)
+  if e.state ~= ST.DEAD then e.state=ST.DIE end
+end
+
 function update(e)
   if e.grab_by ~= nil then return end
   local iv={pos=vec2(0,0), jump=false}
-  if e.ctrl ~= nil then iv=handleInput() end
+  if e.ctrl then iv=handleInput() end
   if e.mass then
     if isOnFloor(e) then
       if iv.jump then
@@ -307,21 +324,65 @@ function update(e)
   end
 end
 
-function updateState(e)
-  if e.vx ~= 0 then
-    e.state = ST.RUN
-  else
-    e.state = ST.STAND
+function handleState(e)
+  if e.oldState ~= e.state then initState(e) end
+  local st=e.state
+  if e.state == nil then return nil end
+  if e.state == ST.RUN then
+    if e.vy ~= 0 then st=ST.JUMP
+    elseif e.vx == 0 then st=ST.STAND end
   end
-  if not isOnFloor(e) then
-    e.state=ST.JUMP
+  if e.state == ST.STAND then
+    if e.vy ~= 0 then st=ST.JUMP
+    elseif e.vx ~= 0 then st=ST.RUN end
+  end
+  if e.state == ST.JUMP then
+    if isOnFloor(e) then st=ST.STAND end
+  end
+  if e.state == ST.DIE then
+    if e.vx == 0 and e.vy == 0 then st=ST.DEAD end
+  end
+  if e.state == ST.DEAD then
+    respawn(e)
+    st=ST.STAND
   end
 
-  if e.vx > 0 then
-    e.dir = DIR.R
-  elseif e.vx < 0 then
-    e.dir = DIR.L
+  e.oldState = e.state
+  e.state = st
+end
+
+function initState(e)
+  trace(string.format("init %d", e.state))
+  if e.state == ST.DIE then
+    if e.ctrl ~= nil then e.ctrl = false end
   end
+  if e.state == ST.DEAD then
+    removeFrom(entities, e)
+    spawnCorpse(e)
+  end
+end
+
+function updateDir(e)
+  if e.dir == nil then return nil end
+  if e.vx > 0 then return DIR.R
+  elseif e.vx < 0 then return DIR.L
+  else return e.dir
+  end
+end
+
+function respawn(e)
+  e.x,e.y = SPAWNX,SPAWNY
+  trace("control is " .. (e.ctrl and "on" or "off"))
+  if e.ctrl ~= nil then e.ctrl = true end
+  trace("control is " .. (e.ctrl and "on" or "off"))
+  e.state=ST.STAND
+  table.insert(entities, e)
+end
+
+function spawnCorpse(e)
+  new_ent = deepcopy(Corpse)
+  new_ent.x, new_ent.y = e.x, e.y
+  table.insert(entities, new_ent)
 end
 
 function updateCam(cam,e)
@@ -367,8 +428,8 @@ function TICFail()
 end
 
 function initGame()
-  Player.x = 10
-  Player.y = 10
+  Player.x = SPAWNX
+  Player.y = SPAWNY
   Corpse.x = 50
   Corpse.y = 10
   entities = {Player, Corpse}
@@ -377,16 +438,16 @@ end
 function TICGame()
   cls()
   updateCam(cam, Player)
-  updateState(Player)
-  update(Player)
-  update(Corpse)
   drawMap(Player, cam)
-  animate(Player)
-  animate(Corpse)
-  drawEnt(Player, cam)
-  drawEnt(Corpse, cam)
+  for i,e in ipairs(entities) do
+    handleState(e)
+    e.dir=updateDir(e)
+    update(e)
+    animate(e)
+    drawEnt(e,cam)
+  end
   grab_object(Player)
-  if isTouchSpikeTiles(Player) then mode=MOD_FAIL end
+  if isTouchSpikeTiles(Player) then die(Player) end
   if Player.grabbed ~= nil then print("grabbed", 10, 10, 8) end
   if Corpse.grab_by ~= nil then print("is grabbed", 10, 18, 8) end
 end
