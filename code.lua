@@ -2,6 +2,8 @@ T=8
 W=240
 H=136
 
+DEBUG=false
+
 SPAWNX=10
 SPAWNY=10
 
@@ -30,6 +32,18 @@ function make_tex(c0,w,h)
   return tex
 end
 
+function mul_tex(tex,count)
+  h,w=#tex,#(tex[1])
+  for i=1,h do
+    for j=1,count-1 do
+      for k=1,w do
+        table.insert(tex[i], tex[i][k])
+      end
+    end
+  end
+  return tex
+end
+
 function make_anim(c0,w,h,count)
   anim = {}
   for i=1,count do
@@ -37,6 +51,17 @@ function make_anim(c0,w,h,count)
   end
   return anim
 end
+
+bg0={x=0,y=0,
+  sp=mul_tex(make_tex(132,7,4),10),
+  parallax=0.7
+}
+
+bg1={
+  x=0,y=40,
+  sp=mul_tex(make_tex(32,13,6),5),
+  parallax=0.6
+}
 
 Player = {
   x=0,
@@ -95,7 +120,8 @@ Enemy = {
   mass=true,
   dir=DIR.L,
   shoot={e=Bullet,dy=8,sp=1,cd=10,tick=0,row=3,crow=0,cpause=0,pause=90},
-  anim={tick=0,speed=0.1,sp=make_anim(368,2,3,2)}
+  -- anim={tick=0,speed=0.1,sp=make_anim(368,2,3,2)}
+  sp=make_tex(368,2,3)
 }
 
 JMP_IMP=2.8
@@ -105,9 +131,10 @@ OVERJMP_ACC=0.1
 cam={x=W//2,y=0}
 
 -- tile types
-solid_sprites_index = 80
-spikeFirst=32
-spikeLast=32
+solid_sprites_index = 208
+spikeFirst=192
+spikeLast=192
+spawnId=1
 
 BTN_UP=0
 BTN_LEFT=2
@@ -153,6 +180,23 @@ function removeFrom(tab,obj)
   end
 end
 
+SPAWNED_ENEMIES = {}
+function isEnemySpawned(c,r)
+  for i,v in ipairs(SPAWNED_ENEMIES) do
+    if v.x == c and v.y == r then return true end
+  end
+  return false
+end
+
+function spawnEnemy(c,r)
+  if not isEnemySpawned(c,r) then
+    table.insert(SPAWNED_ENEMIES, (vec2(c,r)))
+    en = deepcopy(Enemy)
+    en.x,en.y=c*T,r*T
+    table.insert(entities, en)
+  end
+end
+
 -- buttons state
 btn_st={
   [BTN_UP]=false,
@@ -190,6 +234,11 @@ end
 function IsTileSolid(x, y)
   tileId = mget(x, y)
   return (tileId >= solid_sprites_index)
+end
+
+function isTilsSpawner(x,y)
+  tileId=mget(x,y)
+  return tileId==spawnId
 end
 
 function isTileSpike(x,y)
@@ -433,10 +482,10 @@ function handleShoot(e)
   sh = e.shoot
   -- shoot={e=Bullet,dy=8,sp=1,cd=10,tick=0,row=3,crow=0,cpause=0,pause=40},
   if sh.cpause == 0 then
-    if sh.tick % sh.cd == 0 then
+    if sh.tick % sh.cd == 1 then
       spawnBullet(sh.e,sh.sp,e)
     end
-    if sh.tick > sh.cd*sh.row then
+    if sh.tick >= sh.cd*sh.row then
       sh.cpause=sh.cpause+1
       sh.tick=0
     else
@@ -446,6 +495,10 @@ function handleShoot(e)
     sh.cpause=sh.cpause+1
     if sh.cpause >= sh.pause then sh.cpause = 0 end
   end
+end
+
+function handleParallax(bg,e)
+  bg.x = -1 * cam.x * bg.parallax
 end
 
 function updateDir(e)
@@ -473,6 +526,7 @@ end
 function updateCam(cam,e)
   -- TODO: fix camera pos
   cam.x=math.min(W//2,W//2-e.x)
+  if e.x < W // 2 then cam.x = 0 end
   -- cam.y=math.min(H//2,H//2-e.y)
 end
 
@@ -482,7 +536,11 @@ end
 
 crx, cry = 0, 0
 function drawMap(e,cam)
-  map(crx,cry,60,34,crx*8+cam.x,cry*8+cam.y,-1,1, function(tile, x, y)
+  map(crx,cry,240,34,crx*8+cam.x,cry*8+cam.y,0,1, function(tile, x, y)
+    if isTilsSpawner(x,y) then
+      spawnEnemy(x,y)
+      if DEBUG then return tile else return 0 end
+    end
     return tile
   end)
 end
@@ -521,16 +579,16 @@ function initGame()
   Player.x = SPAWNX
   Player.y = SPAWNY
   Player.lives=9
-  Corpse.x = 50
-  Corpse.y = 10
-  Enemy.x = 80
-  Enemy.y = 10
-  entities = {Player, Enemy}
+  entities = {Player}
+  bg={bg0,bg1}
 end
 
 function TICGame()
   cls()
+  rect(0,0,W,H,6)
   updateCam(cam, Player)
+  drawEnt(bg0,cam)
+  drawEnt(bg1,cam)
   drawMap(Player, cam)
   for i,e in ipairs(entities) do
     handleState(e)
@@ -540,6 +598,9 @@ function TICGame()
     update(e)
     animate(e)
     drawEnt(e,cam)
+  end
+  for i,v in ipairs(bg) do
+    handleParallax(v,Player)
   end
   grab_object(Player)
   if isTouchSpikeTiles(Player) then die(Player) end
