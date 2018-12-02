@@ -5,7 +5,7 @@ H=136
 DEBUG=false
 
 SPAWNX=10
-SPAWNY=10
+SPAWNY=80
 
 ST={
   STAND=1,
@@ -87,8 +87,8 @@ Player = {
 }
 
 Flag={
-  x=1200,
-  y=50,
+  x=103*T,
+  y=4*T,
   vx=0,vy=0,
   cr={x=8,y=8,w=16,h=16},
   anim={tick=0,speed=0.1,sp=make_anim(373,4,4,2)}
@@ -147,7 +147,7 @@ cam={x=W//2,y=0}
 -- tile types
 solid_sprites_index = 208
 spikeFirst=192
-spikeLast=192
+spikeLast=196
 spawnId=1
 
 BTN_UP=0
@@ -437,7 +437,7 @@ function handleState(e)
     if isOnFloor(e) then st=ST.STAND end
   end
   if e.state == ST.DIE then
-    if e.vx == 0 and e.vy == 0 then
+    if e.vx == 0 then
       if e.dieTick <= 0 then
         st=ST.DEAD
       else
@@ -652,7 +652,12 @@ function TICGame()
   renderHud(Player)
   grab_object(Player)
   if isTouchSpikeTiles(Player) then die(Player) end
+  if Player.y > 200 then die(Player) end
   if intersect(Player, Flag) then mode=MOD_WIN end
+  if Player.lives < 9 and not gotit then
+    print("Press Z to grab dead body", 10+cam.x,124)
+    if Player.grabbed ~= nil then gotit=true end
+  end
 end
 
 function initWin()
