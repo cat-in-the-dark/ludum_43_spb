@@ -119,6 +119,7 @@ Enemy = {
   vy=0,
   rigid=true,
   mass=true,
+  follow=true,
   dir=DIR.L,
   state=ST.STAND,
   shoot={e=Bullet,dy=8,sp=1,cd=10,tick=0,row=3,crow=0,cpause=0,pause=90},
@@ -482,6 +483,13 @@ function handleBullet(e,cam)
   end
 end
 
+function handleFollow(e,target)
+  if e.follow == nil then return end
+  if e.x < target.x then e.dir=DIR.R
+  elseif e.x > target.x then e.dir=DIR.L
+  end
+end
+
 function handleShoot(e)
   if e.shoot == nil then return end
   sh = e.shoot
@@ -588,6 +596,7 @@ function initGame()
   Player.lives=9
   entities = {Player}
   bg={bg0,bg1}
+  SPAWNED_ENEMIES={}
 end
 
 function TICGame()
@@ -602,6 +611,7 @@ function TICGame()
     e.dir=updateDir(e)
     handleShoot(e)
     handleBullet(e,cam)
+    handleFollow(e,Player)
     update(e)
     animate(e)
     drawEnt(e,cam)
