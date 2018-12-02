@@ -48,6 +48,8 @@ Player = {
   mass=true,
   state=ST.STAND,
   dir=DIR.R,
+  can_die=true,
+  lives=9,
   anim={tick=0,speed=0.13,sp={
     [ST.STAND]=make_anim(280, 2, 3, 1),
     [ST.RUN]=make_anim(272, 2, 3, 4),
@@ -217,10 +219,13 @@ function drawEnt(e,cam)
   end
 end
 
-function collide(e1,e2)
-  return e2.rigid and
-    (e1.x+e1.cr.x < e2.x+e2.cr.x+e2.cr.w and e2.x+e2.cr.x < e1.x+e1.cr.x+e1.cr.w) and
+function intersect(e1,e2)
+  return (e1.x+e1.cr.x < e2.x+e2.cr.x+e2.cr.w and e2.x+e2.cr.x < e1.x+e1.cr.x+e1.cr.w) and
     (e1.y+e1.cr.y < e2.y+e2.cr.y+e2.cr.h and e2.y+e2.cr.y < e1.y+e1.cr.y+e1.cr.h)
+end
+
+function collide(e1,e2)
+  return e2.rigid and intersect(e1, e2)
 end
 
 function handleInput()
@@ -379,11 +384,13 @@ function handleState(e)
 end
 
 function initState(e)
-  trace(string.format("init %d", e.state))
   if e.state == ST.DIE then
     if e.ctrl ~= nil then e.ctrl = false end
+    e.vx=0
   end
   if e.state == ST.DEAD then
+    e.lives=e.lives-1
+    if e.lives <= 0 then mode=MOD_FAIL end
     removeFrom(entities, e)
     spawnCorpse(e)
   end
@@ -396,11 +403,29 @@ function spawnBullet(be,bsp,e)
     newb.x=e.x+e.cr.w+1
     newb.vx=e.shoot.sp
   else
-    newb.x=e.x-1
+    newb.x=e.x-newb.cr.w-1
     newb.vx=-1*e.shoot.sp
   end
   newb.y=e.y+e.shoot.dy
   table.insert(entities, newb)
+end
+
+function handleBullet(e,cam)
+  if e.bullet == nil then return end
+  for i,en in ipairs(entities) do
+    if collide(e,en) and e ~= en then
+      if not e.bullet.penetr then
+        removeFrom(entities, e)
+        e = nil
+      end
+      if en.can_die then die(en) end
+      return
+    end
+  end
+  if not inViewPort(e,cam) then
+    removeFrom(entities, e)
+    e = nil
+  end
 end
 
 function handleShoot(e)
@@ -433,9 +458,7 @@ end
 
 function respawn(e)
   e.x,e.y = SPAWNX,SPAWNY
-  trace("control is " .. (e.ctrl and "on" or "off"))
   if e.ctrl ~= nil then e.ctrl = true end
-  trace("control is " .. (e.ctrl and "on" or "off"))
   e.state=ST.STAND
   table.insert(entities, e)
 end
@@ -448,8 +471,13 @@ function spawnCorpse(e)
 end
 
 function updateCam(cam,e)
+  -- TODO: fix camera pos
   cam.x=math.min(W//2,W//2-e.x)
   -- cam.y=math.min(H//2,H//2-e.y)
+end
+
+function inViewPort(e,cam)
+  return e.x + cam.x > 0 and e.x + cam.x < W
 end
 
 crx, cry = 0, 0
@@ -492,6 +520,7 @@ end
 function initGame()
   Player.x = SPAWNX
   Player.y = SPAWNY
+  Player.lives=9
   Corpse.x = 50
   Corpse.y = 10
   Enemy.x = 80
@@ -507,14 +536,14 @@ function TICGame()
     handleState(e)
     e.dir=updateDir(e)
     handleShoot(e)
+    handleBullet(e,cam)
     update(e)
     animate(e)
     drawEnt(e,cam)
   end
   grab_object(Player)
   if isTouchSpikeTiles(Player) then die(Player) end
-  if Player.grabbed ~= nil then print("grabbed", 10, 10, 8) end
-  if Corpse.grab_by ~= nil then print("is grabbed", 10, 18, 8) end
+  print(string.format("Lives: %d", Player.lives), 10, 10)
 end
 
 -- game modes
@@ -523,7 +552,7 @@ MOD_FAIL=2
 
 TICMode={
   [MOD_GAME]=TICGame,
-  [MOD_FAIL]=TICFail
+  [MOD_FAIL]=TICFail,
 }
 
 inits={
