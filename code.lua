@@ -70,6 +70,32 @@ Corpse = {
   anim={tick=0,speed=0.1,sp=make_anim(320,3,3,3)}
 }
 
+Bullet={
+  x=0,
+  y=0,
+  cr={x=1,y=1,w=6,h=6},
+  vx=0,
+  vy=0,
+  rigid=false,
+  mass=false,
+  bullet={penetr=false},
+  dir=DIR.R,
+  sp=make_tex(416,1,1)
+}
+
+Enemy = {
+  x=0,
+  y=0,
+  cr={x=1,y=0,w=14,h=24},
+  vx=0,
+  vy=0,
+  rigid=true,
+  mass=true,
+  dir=DIR.L,
+  shoot={e=Bullet,dy=8,sp=1,cd=10,tick=0,row=3,crow=0,cpause=0,pause=90},
+  anim={tick=0,speed=0.1,sp=make_anim(368,2,3,2)}
+}
+
 JMP_IMP=2.8
 ACCEL=0.2
 OVERJMP_ACC=0.1
@@ -170,6 +196,7 @@ function isTileSpike(x,y)
 end
 
 function animate(e)
+  if e.anim == nil then return end
   local anim=e.anim.sp
   if e.state ~= nil then anim=e.anim.sp[e.state] end
   e.sp=anim[(math.floor(e.anim.tick)%#anim)+1]
@@ -290,18 +317,18 @@ end
 
 function update(e)
   if e.grab_by ~= nil then return end
-  local iv={pos=vec2(0,0), jump=false}
+  local iv={pos=vec2(e.vx,e.vy), jump=false}
   if e.ctrl then iv=handleInput() end
   if e.mass then
-    if isOnFloor(e) then
+    if e.rigid and isOnFloor(e) then
       if iv.jump then
         e.vy=-1*JMP_IMP
       else
         e.vy=0
       end
-    elseif isUnderCeiling(e) and e.vy < 0 then
+    elseif e.rigid and isUnderCeiling(e) and e.vy < 0 then
       e.vy=0
-    elseif btn(BTN_UP) and e.vy < 0 then
+    elseif e.ctrl and btn(BTN_UP) and e.vy < 0 then
       e.vy=e.vy+OVERJMP_ACC
     else
       e.vy = e.vy+ACCEL
@@ -362,6 +389,40 @@ function initState(e)
   end
 end
 
+function spawnBullet(be,bsp,e)
+  newb=deepcopy(be)
+  newb.dir=e.dir
+  if e.dir == nil or e.dir == DIR.R then
+    newb.x=e.x+e.cr.w+1
+    newb.vx=e.shoot.sp
+  else
+    newb.x=e.x-1
+    newb.vx=-1*e.shoot.sp
+  end
+  newb.y=e.y+e.shoot.dy
+  table.insert(entities, newb)
+end
+
+function handleShoot(e)
+  if e.shoot == nil then return end
+  sh = e.shoot
+  -- shoot={e=Bullet,dy=8,sp=1,cd=10,tick=0,row=3,crow=0,cpause=0,pause=40},
+  if sh.cpause == 0 then
+    if sh.tick % sh.cd == 0 then
+      spawnBullet(sh.e,sh.sp,e)
+    end
+    if sh.tick > sh.cd*sh.row then
+      sh.cpause=sh.cpause+1
+      sh.tick=0
+    else
+      sh.tick=sh.tick+1
+    end
+  else
+    sh.cpause=sh.cpause+1
+    if sh.cpause >= sh.pause then sh.cpause = 0 end
+  end
+end
+
 function updateDir(e)
   if e.dir == nil then return nil end
   if e.vx > 0 then return DIR.R
@@ -381,6 +442,7 @@ end
 
 function spawnCorpse(e)
   new_ent = deepcopy(Corpse)
+  -- TODO: try to spawn corpse in empty position
   new_ent.x, new_ent.y = e.x, e.y
   table.insert(entities, new_ent)
 end
@@ -432,7 +494,9 @@ function initGame()
   Player.y = SPAWNY
   Corpse.x = 50
   Corpse.y = 10
-  entities = {Player, Corpse}
+  Enemy.x = 80
+  Enemy.y = 10
+  entities = {Player, Enemy}
 end
 
 function TICGame()
@@ -442,6 +506,7 @@ function TICGame()
   for i,e in ipairs(entities) do
     handleState(e)
     e.dir=updateDir(e)
+    handleShoot(e)
     update(e)
     animate(e)
     drawEnt(e,cam)
