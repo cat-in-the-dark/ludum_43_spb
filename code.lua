@@ -12,7 +12,8 @@ ST={
   RUN=2,
   JUMP=3,
   DIE=4,
-  DEAD=5
+  DEAD=5,
+  SHOOT=6
 }
 
 DIR={
@@ -119,8 +120,12 @@ Enemy = {
   rigid=true,
   mass=true,
   dir=DIR.L,
+  state=ST.STAND,
   shoot={e=Bullet,dy=8,sp=1,cd=10,tick=0,row=3,crow=0,cpause=0,pause=90},
-  -- anim={tick=0,speed=0.1,sp=make_anim(368,2,3,2)}
+  anim={tick=0,speed=0.13,sp={
+    [ST.SHOOT]=make_anim(368,2,3,2),
+    [ST.STAND]=make_anim(368,2,3,1)
+  }},
   sp=make_tex(368,2,3)
 }
 
@@ -482,6 +487,7 @@ function handleShoot(e)
   sh = e.shoot
   -- shoot={e=Bullet,dy=8,sp=1,cd=10,tick=0,row=3,crow=0,cpause=0,pause=40},
   if sh.cpause == 0 then
+    e.state=ST.SHOOT
     if sh.tick % sh.cd == 1 then
       spawnBullet(sh.e,sh.sp,e)
     end
@@ -492,6 +498,7 @@ function handleShoot(e)
       sh.tick=sh.tick+1
     end
   else
+    e.state=ST.STAND
     sh.cpause=sh.cpause+1
     if sh.cpause >= sh.pause then sh.cpause = 0 end
   end
@@ -590,8 +597,8 @@ function TICGame()
   drawEnt(bg0,cam)
   drawEnt(bg1,cam)
   drawMap(Player, cam)
+  handleState(Player)
   for i,e in ipairs(entities) do
-    handleState(e)
     e.dir=updateDir(e)
     handleShoot(e)
     handleBullet(e,cam)
