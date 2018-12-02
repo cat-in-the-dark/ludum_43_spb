@@ -122,7 +122,7 @@ Enemy = {
   follow=true,
   dir=DIR.L,
   state=ST.STAND,
-  shoot={e=Bullet,dy=8,sp=1,cd=10,tick=0,row=3,crow=0,cpause=0,pause=90},
+  shoot={e=Bullet,dy=10,sp=1,cd=10,tick=0,row=3,crow=0,cpause=0,pause=90},
   anim={tick=0,speed=0.13,sp={
     [ST.SHOOT]=make_anim(368,2,3,2),
     [ST.STAND]=make_anim(368,2,3,1)
@@ -262,13 +262,15 @@ end
 
 function drawEnt(e,cam)
   local i=1
+  local dx,dy=0,0
+  if cam ~= nil then dx,dy = cam.x,cam.y end
   for i,t in ipairs(e.sp) do
     for j,v in ipairs(t) do
       if e.dir == nil or e.dir == DIR.R then
-        spr(v, e.x+(j-1)*T+cam.x, e.y+(i-1)*T+cam.y, 0)
+        spr(v, e.x+(j-1)*T+dx, e.y+(i-1)*T+dy, 0)
       else
         tlen = #t
-        spr(v, e.x+(tlen-j)*T+cam.x, e.y+(i-1)*T+cam.y, 0, 1, 1)
+        spr(v, e.x+(tlen-j)*T+dx, e.y+(i-1)*T+dy, 0, 1, 1)
       end
     end
   end
@@ -427,11 +429,21 @@ function handleState(e)
     if isOnFloor(e) then st=ST.STAND end
   end
   if e.state == ST.DIE then
-    if e.vx == 0 and e.vy == 0 then st=ST.DEAD end
+    if e.vx == 0 and e.vy == 0 then
+      if e.dieTick <= 0 then
+        st=ST.DEAD
+      else
+        e.dieTick = e.dieTick-1
+      end
+    end
   end
   if e.state == ST.DEAD then
-    respawn(e)
-    st=ST.STAND
+    if e.deadT <= 0 then
+      respawn(e)
+      st=ST.STAND
+    else
+      e.deadT = e.deadT-1
+    end
   end
 
   e.oldState = e.state
@@ -440,10 +452,12 @@ end
 
 function initState(e)
   if e.state == ST.DIE then
+    e.dieTick = 10
     if e.ctrl ~= nil then e.ctrl = false end
     e.vx=0
   end
   if e.state == ST.DEAD then
+    e.deadT = 60
     e.lives=e.lives-1
     if e.lives <= 0 then mode=MOD_FAIL end
     removeFrom(entities, e)
@@ -495,6 +509,7 @@ function handleShoot(e)
   sh = e.shoot
   -- shoot={e=Bullet,dy=8,sp=1,cd=10,tick=0,row=3,crow=0,cpause=0,pause=40},
   if sh.cpause == 0 then
+    sh.newPause=sh.pause-sh.pause//2+math.random(sh.pause)
     e.state=ST.SHOOT
     if sh.tick % sh.cd == 1 then
       spawnBullet(sh.e,sh.sp,e)
@@ -508,7 +523,7 @@ function handleShoot(e)
   else
     e.state=ST.STAND
     sh.cpause=sh.cpause+1
-    if sh.cpause >= sh.pause then sh.cpause = 0 end
+    if sh.cpause >= sh.newPause then sh.cpause = 0 end
   end
 end
 
@@ -579,6 +594,12 @@ function grab_object(e)
   end
 end
 
+function renderHud(e)
+  s=mul_tex(make_tex(372,1,1),e.lives)
+  hud={x=8,y=8,sp=s}
+  drawEnt(hud)
+end
+
 function initFail()
 end
 
@@ -594,6 +615,7 @@ function initGame()
   Player.x = SPAWNX
   Player.y = SPAWNY
   Player.lives=9
+  Player.state=ST.STAND
   entities = {Player}
   bg={bg0,bg1}
   SPAWNED_ENEMIES={}
@@ -619,9 +641,9 @@ function TICGame()
   for i,v in ipairs(bg) do
     handleParallax(v,Player)
   end
+  renderHud(Player)
   grab_object(Player)
   if isTouchSpikeTiles(Player) then die(Player) end
-  print(string.format("Lives: %d", Player.lives), 10, 10)
 end
 
 -- game modes
