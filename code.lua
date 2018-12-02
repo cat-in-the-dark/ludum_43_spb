@@ -54,13 +54,13 @@ function make_anim(c0,w,h,count)
 end
 
 bg0={x=0,y=0,
-  sp=mul_tex(make_tex(132,7,4),10),
+  sp=mul_tex(make_tex(132,7,4),30),
   parallax=0.7
 }
 
 bg1={
   x=0,y=40,
-  sp=mul_tex(make_tex(32,13,6),5),
+  sp=mul_tex(make_tex(32,13,6),20),
   parallax=0.6
 }
 
@@ -84,6 +84,14 @@ Player = {
     [ST.DEAD]=make_anim(286,2,3,1)
   }},
   ctrl=true
+}
+
+Flag={
+  x=1200,
+  y=50,
+  vx=0,vy=0,
+  cr={x=8,y=8,w=16,h=16},
+  anim={tick=0,speed=0.1,sp=make_anim(373,4,4,2)}
 }
 
 Corpse = {
@@ -616,7 +624,7 @@ function initGame()
   Player.y = SPAWNY
   Player.lives=9
   Player.state=ST.STAND
-  entities = {Player}
+  entities = {Player, Flag}
   bg={bg0,bg1}
   SPAWNED_ENEMIES={}
 end
@@ -644,20 +652,35 @@ function TICGame()
   renderHud(Player)
   grab_object(Player)
   if isTouchSpikeTiles(Player) then die(Player) end
+  if intersect(Player, Flag) then mode=MOD_WIN end
+end
+
+function initWin()
+end
+
+function TICWin()
+  cls()
+  local string="WOW, YOU WON!"
+  local w=print(string,0,-6)
+  print(string,(W-w)//2,(H-6)//2)
+  if btn(BTN_Z) then mode=MOD_GAME end
 end
 
 -- game modes
 MOD_GAME=1
 MOD_FAIL=2
+MOD_WIN=3
 
 TICMode={
   [MOD_GAME]=TICGame,
   [MOD_FAIL]=TICFail,
+  [MOD_WIN]=TICWin
 }
 
 inits={
   [MOD_GAME]=initGame,
-  [MOD_FAIL]=initFail
+  [MOD_FAIL]=initFail,
+  [MOD_WIN]=initWin
 }
 
 function init()
