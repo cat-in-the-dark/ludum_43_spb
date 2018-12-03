@@ -188,9 +188,19 @@ function deepcopy(orig)
   return copy
 end
 
-function removeFrom(tab,obj)
+function removeFrom(tab,obj,toDel)
+  obj.__rem=true
+  obj.__del=toDel
+end
+
+function cleanup(tab)
   for i = #tab, 1, -1 do
-    if tab[i] == obj then table.remove(tab, i) end
+    obj=tab[i]
+    if obj.__rem then
+      obj.__rem=false
+      table.remove(tab, i)
+      if obj.__del then obj=nil end
+    end
   end
 end
 
@@ -468,7 +478,7 @@ function initState(e)
     e.deadT = 60
     e.lives=e.lives-1
     if e.lives <= 0 then mode=MOD_FAIL end
-    removeFrom(entities, e)
+    removeFrom(entities, e, false)
     spawnCorpse(e)
   end
 end
@@ -492,16 +502,14 @@ function handleBullet(e,cam)
   for i,en in ipairs(entities) do
     if collide(e,en) and e ~= en then
       if not e.bullet.penetr then
-        removeFrom(entities, e)
-        e = nil
+        removeFrom(entities, e, true)
       end
       if en.can_die then die(en) end
       return
     end
   end
   if not inViewPort(e,cam) then
-    removeFrom(entities, e)
-    e = nil
+    removeFrom(entities, e, true)
   end
 end
 
@@ -572,6 +580,12 @@ function inViewPort(e,cam)
   return e.x + cam.x > 0 and e.x + cam.x < W
 end
 
+function disposeFallen(e)
+  if e.y > H + 200 then
+    removeFrom(entities, e)
+  end
+end
+
 crx, cry = 0, 0
 function drawMap(e,cam)
   map(crx,cry,240,34,crx*8+cam.x,cry*8+cam.y,0,1, function(tile, x, y)
@@ -613,7 +627,7 @@ end
 
 function TICFail()
   cls()
-  local string="YOU LOOSE"
+  local string="YOU LOSE"
   local w=print(string,0,-6)
   print(string,(W-w)//2,(H-6)//2)
   if btn(BTN_Z) then mode=MOD_GAME end
@@ -645,7 +659,9 @@ function TICGame()
     update(e)
     animate(e)
     drawEnt(e,cam)
+    disposeFallen(e)
   end
+  cleanup(entities)
   for i,v in ipairs(bg) do
     handleParallax(v,Player)
   end
