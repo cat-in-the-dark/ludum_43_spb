@@ -2,6 +2,8 @@ T=8
 W=240
 H=136
 
+sf=string.format
+
 DEBUG=false
 
 SPAWNX=10
@@ -54,14 +56,18 @@ function make_anim(c0,w,h,count)
 end
 
 bg0={x=0,y=0,
-  sp=mul_tex(make_tex(132,7,4),30),
-  parallax=0.7
+  sp=mul_tex(make_tex(132,6,4),6),
+  parallax=0.7,
+  off=48,
+  offVal=0
 }
 
 bg1={
   x=0,y=40,
-  sp=mul_tex(make_tex(32,13,6),20),
-  parallax=0.6
+  sp=mul_tex(make_tex(32,13,6),4),
+  parallax=0.6,
+  off=104,
+  offVal=0
 }
 
 Player = {
@@ -148,7 +154,8 @@ cam={x=W//2,y=0}
 solid_sprites_index = 208
 spikeFirst=192
 spikeLast=196
-spawnId=1
+spawnId0=1
+spawnId1=147
 
 BTN_UP=0
 BTN_LEFT=2
@@ -262,7 +269,7 @@ end
 
 function isTilsSpawner(x,y)
   tileId=mget(x,y)
-  return tileId==spawnId
+  return tileId == spawnId0 or tileId==spawnId1
 end
 
 function isTileSpike(x,y)
@@ -543,8 +550,11 @@ function handleShoot(e)
   end
 end
 
-function handleParallax(bg,e)
-  bg.x = -1 * cam.x * bg.parallax
+function handleParallax(bg,cam)
+  -- if bg.x+cam.x > -1*bg.off then bg.offVal = bg.offVal - bg.off
+  -- elseif bg.x+cam.x < -1*bg.off then bg.offVal = bg.offVal + bg.off end
+  local pr=cam.x * bg.parallax
+  bg.x = -1 * pr + ((pr-cam.x) // bg.off) * bg.off
 end
 
 function updateDir(e)
@@ -586,12 +596,13 @@ function disposeFallen(e)
   end
 end
 
-crx, cry = 0, 0
 function drawMap(e,cam)
-  map(crx,cry,240,34,crx*8+cam.x,cry*8+cam.y,0,1, function(tile, x, y)
+  local cx=-cam.x // T
+  local offx=cx * T + cam.x
+  map(cx,0,31,17,offx,cam.y,0,1, function(tile, x, y)
     if isTilsSpawner(x,y) then
       spawnEnemy(x,y)
-      if DEBUG then return tile else return 0 end
+      if DEBUG then return tile else return tile-1 end
     end
     return tile
   end)
@@ -663,7 +674,7 @@ function TICGame()
   end
   cleanup(entities)
   for i,v in ipairs(bg) do
-    handleParallax(v,Player)
+    handleParallax(v,cam)
   end
   renderHud(Player)
   grab_object(Player)
