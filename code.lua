@@ -270,10 +270,10 @@ function drawEnt(e,cam)
   for i,t in ipairs(e.sp) do
     for j,v in ipairs(t) do
       if e.dir == nil or e.dir == DIR.R then
-        spr(v, e.x+(j-1)*T+dx, e.y+(i-1)*T+dy, 0)
+        spr(v, e.x+(j-1)*T-dx, e.y+(i-1)*T+dy, 0)
       else
         tlen = #t
-        spr(v, e.x+(tlen-j)*T+dx, e.y+(i-1)*T+dy, 0, 1, 1)
+        spr(v, e.x+(tlen-j)*T-dx, e.y+(i-1)*T+dy, 0, 1, 1)
       end
     end
   end
@@ -531,8 +531,8 @@ end
 function handleParallax(bg,cam)
   -- if bg.x+cam.x > -1*bg.off then bg.offVal = bg.offVal - bg.off
   -- elseif bg.x+cam.x < -1*bg.off then bg.offVal = bg.offVal + bg.off end
-  local pr=cam.x * bg.parallax
-  bg.x = -1 * pr + ((pr-cam.x) // bg.off) * bg.off
+  local pr=-cam.x * bg.parallax
+  bg.x = -1 * pr + ((pr+cam.x) // bg.off) * bg.off
 end
 
 function updateDir(e)
@@ -559,13 +559,13 @@ end
 
 function updateCam(cam,e)
   -- TODO: fix camera pos
-  cam.x=math.min(W//2,W//2-e.x)
+  cam.x=e.x-W//2
   if e.x < W // 2 then cam.x = 0 end
   -- cam.y=math.min(H//2,H//2-e.y)
 end
 
 function inViewPort(e,cam)
-  return e.x + cam.x > 0 and e.x + cam.x < W
+  return e.x - cam.x > 0 and e.x - cam.x < W
 end
 
 function disposeFallen(e)
@@ -575,8 +575,8 @@ function disposeFallen(e)
 end
 
 function drawMap(e,cam)
-  local cx=-cam.x // T
-  local offx=cx * T + cam.x
+  local cx=cam.x // T
+  local offx=cx * T - cam.x
   map(cx,0,31,17,offx,cam.y,0,1, function(tile, x, y)
     if isTilsSpawner(x,y) then
       spawnEnemy(x,y)
@@ -660,7 +660,7 @@ function TICGame()
   if Player.y > 200 then die(Player) end
   if intersect(Player, Flag) then mode=MOD_WIN end
   if Player.lives < 9 and not gotit then
-    print("Press Z to grab dead body", 10+cam.x,124)
+    print("Press Z to grab dead body", 10-cam.x,124)
     if Player.grabbed ~= nil then gotit=true end
   end
 end
