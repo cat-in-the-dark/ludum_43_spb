@@ -227,7 +227,7 @@ function spawnEnemy(c,r)
     table.insert(SPAWNED_ENEMIES, (vec2(c,r)))
     en = deepcopy(Enemy)
     en.x,en.y=c*T,r*T
-    table.insert(entities, en)
+    table.insert(ENTITIES, en)
   end
 end
 
@@ -238,31 +238,6 @@ btn_st={
   [BTN_RIGHT]=false,
   [BTN_Z]=false
 }
-
-function btni(id)
-  if btn(id) then
-    btn_st[id]=true
-    return false
-  elseif btn_st[id] then
-    btn_st[id]=false
-    return true
-  end
-end
-
--- triiger button event once on contituous button press
-function btno(id)
-  if btn(id) then
-    if not btn_st[id] then
-      btn_st[id]=true
-      return true
-    else
-      return false
-    end
-  else
-    btn_st[id]=false
-    return false
-  end
-end
 
 -- tile helpers
 function IsTileSolid(x, y)
@@ -320,7 +295,7 @@ function handleInput()
   elseif btn(BTN_RIGHT) then
     iv.pos.x = 1
   end
-  if btno(BTN_UP) then
+  if btnp(BTN_UP) then
     iv.jump=true
   end
   return iv
@@ -352,7 +327,7 @@ function CanMove(dp,e)
       return
     end
   end)
-  for i,en in ipairs(entities) do
+  for i,en in ipairs(ENTITIES) do
     if e ~= en and collide({x=dp.x,y=dp.y,cr=e.cr},en) then return false end
   end
   return cm
@@ -488,7 +463,7 @@ function initState(e)
     e.deadT = 60
     e.lives=e.lives-1
     if e.lives <= 0 then mode=MOD_FAIL end
-    removeFrom(entities, e, false)
+    removeFrom(ENTITIES, e, false)
     spawnCorpse(e)
   end
 end
@@ -504,22 +479,22 @@ function spawnBullet(be,bsp,e)
     newb.vx=-1*e.shoot.sp
   end
   newb.y=e.y+e.shoot.dy
-  table.insert(entities, newb)
+  table.insert(ENTITIES, newb)
 end
 
 function handleBullet(e,cam)
   if e.bullet == nil then return end
-  for i,en in ipairs(entities) do
+  for i,en in ipairs(ENTITIES) do
     if collide(e,en) and e ~= en then
       if not e.bullet.penetr then
-        removeFrom(entities, e, true)
+        removeFrom(ENTITIES, e, true)
       end
       if en.can_die then die(en) end
       return
     end
   end
   if not inViewPort(e,cam) then
-    removeFrom(entities, e, true)
+    removeFrom(ENTITIES, e, true)
   end
 end
 
@@ -572,14 +547,14 @@ function respawn(e)
   e.x,e.y = SPAWNX,SPAWNY
   if e.ctrl ~= nil then e.ctrl = true end
   e.state=ST.STAND
-  table.insert(entities, e)
+  table.insert(ENTITIES, e)
 end
 
 function spawnCorpse(e)
   new_ent = deepcopy(Corpse)
   -- TODO: try to spawn corpse in empty position
   new_ent.x, new_ent.y = e.x, e.y
-  table.insert(entities, new_ent)
+  table.insert(ENTITIES, new_ent)
 end
 
 function updateCam(cam,e)
@@ -595,7 +570,7 @@ end
 
 function disposeFallen(e)
   if e.y > H + 200 then
-    removeFrom(entities, e)
+    removeFrom(ENTITIES, e)
   end
 end
 
@@ -615,7 +590,7 @@ function grab_object(e)
   if btn(BTN_Z) then
     local cr_grab = {x=e.cr.x-1, y=e.cr.y, w=e.cr.w+2, h=e.cr.h}
     local e_gr = {x=e.x, y=e.y, cr=cr_grab}
-    for i,en in ipairs(entities) do
+    for i,en in ipairs(ENTITIES) do
       if (collide(e_gr, en)) and en.grabbable and en ~= e then
         if e.grabbed ~= nil then e.grabbed.grab_by = nil end
         e.grabbed = en
@@ -652,7 +627,7 @@ function initGame()
   Player.y = SPAWNY
   Player.lives=9
   Player.state=ST.STAND
-  entities = {Player, Flag}
+  ENTITIES = {Player, Flag}
   bg={bg0,bg1}
   SPAWNED_ENEMIES={}
 end
@@ -665,7 +640,7 @@ function TICGame()
   drawEnt(bg1,cam)
   drawMap(Player, cam)
   handleState(Player)
-  for i,e in ipairs(entities) do
+  for i,e in ipairs(ENTITIES) do
     e.dir=updateDir(e)
     handleShoot(e)
     handleBullet(e,cam)
@@ -675,7 +650,7 @@ function TICGame()
     drawEnt(e,cam)
     disposeFallen(e)
   end
-  cleanup(entities)
+  cleanup(ENTITIES)
   for i,v in ipairs(bg) do
     handleParallax(v,cam)
   end
