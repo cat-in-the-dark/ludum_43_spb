@@ -102,10 +102,11 @@ Player = {
 }
 
 Flag={
-  x=103*T,
-  y=4*T,
+  x=0,
+  y=0,
   vx=0,vy=0,
   cr={x=8,y=8,w=16,h=16},
+  flag=true,
   anim={tick=0,speed=0.1,sp=make_anim(373,4,4,2)}
 }
 
@@ -165,6 +166,7 @@ spikeFirst=192
 spikeLast=196
 spawnId0=1
 spawnId1=147
+flagId=2
 
 BTN_UP=0
 BTN_DOWN=1
@@ -222,40 +224,37 @@ function cleanup(tab)
   end
 end
 
-SPAWNED_ENEMIES = {}
-function isEnemySpawned(c,r)
-  for i,v in ipairs(SPAWNED_ENEMIES) do
+function isEntityIn(c,r,tbl)
+  for i,v in ipairs(tbl) do
     if v.x == c and v.y == r then return true end
   end
   return false
 end
 
+SPAWNED_ENEMIES = {}
 function spawnEnemy(c,r)
-  if not isEnemySpawned(c,r) then
+  if not isEntityIn(c,r,SPAWNED_ENEMIES) then
     table.insert(SPAWNED_ENEMIES, (vec2(c,r)))
-    en = deepcopy(Enemy)
+    local en = deepcopy(Enemy)
     en.x,en.y=c*T,r*T
     table.insert(ENTITIES, en)
   end
 end
 
--- buttons state
-btn_st={
-  [BTN_UP]=false,
-  [BTN_LEFT]=false,
-  [BTN_RIGHT]=false,
-  [BTN_Z]=false
-}
+SPAWNED_FLAGS={}
+function spawnFlag(c,r)
+  if not isEntityIn(c,r,SPAWNED_FLAGS) then
+    table.insert(SPAWNED_FLAGS, (vec2(c,r)))
+    local fl = deepcopy(Flag)
+    fl.x,fl.y=c*T,r*T
+    table.insert(ENTITIES, fl)
+  end
+end
 
 -- tile helpers
 function IsTileSolid(x, y)
   tileId = mget(x, y)
   return (tileId >= solid_sprites_index)
-end
-
-function isTilsSpawner(x,y)
-  tileId=mget(x,y)
-  return tileId == spawnId0 or tileId==spawnId1
 end
 
 function isTileSpike(x,y)
@@ -470,7 +469,10 @@ function initState(e)
   if e.state == ST.DEAD then
     e.deadT = 60
     e.lives=e.lives-1
-    if e.lives <= 0 then mode=MOD_FAIL end
+    if e.lives <= 0 then
+      mode=MOD_FAIL
+      return
+    end
     removeFrom(ENTITIES, e, false)
     spawnCorpse(e)
   end
@@ -493,7 +495,7 @@ end
 function handleBullet(e,cam)
   if e.bullet == nil then return end
   for i,en in ipairs(ENTITIES) do
-    if collide(e,en) and e ~= en then
+    if e ~= en and collide(e,en) then
       if not e.bullet.penetr then
         removeFrom(ENTITIES, e, true)
       end
@@ -503,6 +505,19 @@ function handleBullet(e,cam)
   end
   if not inViewPort(e,cam) then
     removeFrom(ENTITIES, e, true)
+  end
+end
+
+function handleFlag(player)
+  for i,en in ipairs(ENTITIES) do
+    if en.flag ~= nil and intersect(player,en) then
+      if CURRENT_LEVEL >= LEVELS then
+        mode=MOD_WIN
+      else
+        mode=MOD_NEXT_LEVEL
+      end
+      return
+    end
   end
 end
 
@@ -585,9 +600,12 @@ function drawMap(e,cam)
   local cx,cy = cam.x//T, cam.y // T
   local offx=cx * T - cam.x
   map(cx,cy,31,17,offx,0,0,1, function(tile, x, y)
-    if isTilsSpawner(x,y) then
+    if tile == spawnId0 or tile == spawnId1 then
       spawnEnemy(x,y)
       if DEBUG then return tile else return tile-1 end
+    elseif tile == flagId then
+      spawnFlag(x,y)
+      if DEBUG then return tile else return tile+1 end
     end
     return tile
   end)
@@ -622,11 +640,16 @@ function initFail()
 end
 
 function TICFail()
-  cls()
-  local string="YOU LOSE"
-  local w=print(string,0,-6)
-  print(string,(W-w)//2,(H-6)//2)
-  if btn(BTN_Z) then mode=MOD_GAME end
+  cls(6)
+  local str="YOU LOSE"
+  local w=print(str,0,-6)
+  print(str,(W-w)//2+1,(H-6)//2+1,7)
+  print(str,(W-w)//2,(H-6)//2,0)
+  str="Press z"
+  w=print(str,0,-6)
+  print(str,(W-w)//2+1,124,7)
+  print(str,(W-w)//2,123,0)
+  if btnp(BTN_Z) then mode=MOD_INTRO end
 end
 
 function initGame()
@@ -641,12 +664,13 @@ function initGame()
 
   Player.x = SPAWNX
   Player.y = SPAWNY
+  Player.ctrl = true
   cam.y=Player.y//H * H
-  Player.lives=9
   Player.state=ST.STAND
-  ENTITIES = {Player, Flag}
-  bg={bg0,bg1}
+  ENTITIES = {Player}
   SPAWNED_ENEMIES={}
+  SPAWNED_FLAGS={}
+  bg={bg0,bg1}
 end
 
 function TICGame()
@@ -662,6 +686,7 @@ function TICGame()
     handleShoot(e)
     handleBullet(e,cam)
     handleFollow(e,Player)
+    handleFlag(Player)
     update(e)
     animate(e)
     drawEnt(e,cam)
@@ -675,9 +700,9 @@ function TICGame()
   grab_object(Player)
   if isTouchSpikeTiles(Player) then die(Player) end
   if Player.y-cam.y > 200 then die(Player) end
-  if intersect(Player, Flag) then mode=MOD_WIN end
   if Player.lives < 9 and not gotit then
-    print("Press Z to grab dead body", 10-cam.x,124)
+    print("Press Z to grab dead body", 10-cam.x+1,125,7)
+    print("Press Z to grab dead body", 10-cam.x,124,0)
     if Player.grabbed ~= nil then gotit=true end
   end
 end
@@ -686,26 +711,36 @@ function initWin()
 end
 
 function TICWin()
-  cls()
-  local string="WOW, YOU WON!"
-  local w=print(string,0,-6)
-  print(string,(W-w)//2,(H-6)//2)
-  if btn(BTN_Z) then mode=MOD_GAME end
+  cls(6)
+  local str="WOW, YOU WON!"
+  local w=print(str,0,-6)
+  print(str,(W-w)//2+1,(H-6)//2+1,7)
+  print(str,(W-w)//2,(H-6)//2,0)
+  str="Press z"
+  w=print(str,0,-6)
+  print(str,(W-w)//2+1,124,7)
+  print(str,(W-w)//2,123,0)
+  if btnp(BTN_Z) then mode=MOD_INTRO end
 end
 
 function initIntro()
   LOGO_TO=1
+  CURRENT_LEVEL=1
+  Player.lives=9
 end
 
 function TICIntro()
   cls(7)
   spr(432, 88, 24, -1, 8)
-  print("CAT_IN_THE_DARK", 72, 108, 0)
+  print("CAT_IN_THE_DARK", 72, 96, 0)
   LOGO_TO=LOGO_TO+1
+  local str="x: select level"
+  local w=print(str,0,-6)
+  print(str,(W-w)//2,123,5)
   local x,y,d = mouse()
   if d then mode=MOD_GAME end
-  if btn(BTN_Z) then mode=MOD_GAME end
-  if btn(BTN_X) then mode=MOD_SELECT_LEVEL end
+  if btnp(BTN_Z) then mode=MOD_GAME end
+  if btnp(BTN_X) then mode=MOD_SELECT_LEVEL end
   if LOGO_TO > 120 then mode=MOD_GAME end
 end
 
@@ -730,7 +765,28 @@ function TICSelectLevel()
   if CURRENT_LEVEL > LEVELS then CURRENT_LEVEL = LEVELS end
   if CURRENT_LEVEL < 1 then CURRENT_LEVEL = 1 end
 
+  if btnp(BTN_Z) then mode=MOD_GAME end
+end
+
+NEXT_LEVEL_TO=0
+function initNextLevel()
+  CURRENT_LEVEL=CURRENT_LEVEL+1
+end
+
+function TICNextLevel()
+  cls(6)
+  local str = "LEVEL"
+  local w = print(str, 0, -10)
+  print(str, W//2-w//2 + 1, H//2 + 1, 7)
+  print(str, W//2-w//2, H//2, 0)
+  str = sf("- %d -", CURRENT_LEVEL)
+  w = print(str, 0, -10)
+  print(str, W//2-w//2 + 1, H//2 + 1 + 10, 7)
+  print(str, W//2-w//2, H//2 + 10, 0)
+
+  NEXT_LEVEL_TO=NEXT_LEVEL_TO+1
   if btn(BTN_Z) then mode=MOD_GAME end
+  if NEXT_LEVEL_TO > 60 then mode=MOD_GAME end
 end
 
 -- game modes
@@ -739,13 +795,15 @@ MOD_FAIL=2
 MOD_WIN=3
 MOD_INTRO=4
 MOD_SELECT_LEVEL=5
+MOD_NEXT_LEVEL=6
 
 TICMode={
   [MOD_GAME]=TICGame,
   [MOD_FAIL]=TICFail,
   [MOD_WIN]=TICWin,
   [MOD_INTRO]=TICIntro,
-  [MOD_SELECT_LEVEL]=TICSelectLevel
+  [MOD_SELECT_LEVEL]=TICSelectLevel,
+  [MOD_NEXT_LEVEL]=TICNextLevel
 }
 
 inits={
@@ -753,7 +811,8 @@ inits={
   [MOD_FAIL]=initFail,
   [MOD_WIN]=initWin,
   [MOD_INTRO]=initIntro,
-  [MOD_SELECT_LEVEL]=initSelectLevel
+  [MOD_SELECT_LEVEL]=initSelectLevel,
+  [MOD_NEXT_LEVEL]=initNextLevel
 }
 
 function init()
