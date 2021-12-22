@@ -5,12 +5,18 @@ T=8
 W=240
 H=136
 
+MAP_W=30
+MAP_H=17
+
 sf=string.format
 
 DEBUG=false
 
 SPAWNX=10
 SPAWNY=80
+
+LEVEL_SPRITES={15,31,47,63,79,95,111,127}
+LEVELS=#LEVEL_SPRITES
 
 ST={
   STAND=1,
@@ -161,9 +167,11 @@ spawnId0=1
 spawnId1=147
 
 BTN_UP=0
+BTN_DOWN=1
 BTN_LEFT=2
 BTN_RIGHT=3
 BTN_Z=4
+BTN_X=5
 
 function vec2(xV, yV)
   return {x=xV,y=yV}
@@ -270,10 +278,10 @@ function drawEnt(e,cam)
   for i,t in ipairs(e.sp) do
     for j,v in ipairs(t) do
       if e.dir == nil or e.dir == DIR.R then
-        spr(v, e.x+(j-1)*T-dx, e.y+(i-1)*T+dy, 0)
+        spr(v, e.x+(j-1)*T-dx, e.y+(i-1)*T-dy, 0)
       else
         tlen = #t
-        spr(v, e.x+(tlen-j)*T-dx, e.y+(i-1)*T+dy, 0, 1, 1)
+        spr(v, e.x+(tlen-j)*T-dx, e.y+(i-1)*T-dy, 0, 1, 1)
       end
     end
   end
@@ -561,23 +569,22 @@ function updateCam(cam,e)
   -- TODO: fix camera pos
   cam.x=e.x-W//2
   if e.x < W // 2 then cam.x = 0 end
-  -- cam.y=math.min(H//2,H//2-e.y)
 end
 
 function inViewPort(e,cam)
   return e.x - cam.x > 0 and e.x - cam.x < W
 end
 
-function disposeFallen(e)
-  if e.y > H + 200 then
+function disposeFallen(e,cam)
+  if e.y - cam.y > H + 200 then
     removeFrom(ENTITIES, e)
   end
 end
 
 function drawMap(e,cam)
-  local cx=cam.x // T
+  local cx,cy = cam.x//T, cam.y // T
   local offx=cx * T - cam.x
-  map(cx,0,31,17,offx,cam.y,0,1, function(tile, x, y)
+  map(cx,cy,31,17,offx,0,0,1, function(tile, x, y)
     if isTilsSpawner(x,y) then
       spawnEnemy(x,y)
       if DEBUG then return tile else return tile-1 end
@@ -623,8 +630,18 @@ function TICFail()
 end
 
 function initGame()
+  for i=0,8 do
+    for j=0,8 do
+      if mget(i*MAP_W,j*MAP_H) == LEVEL_SPRITES[CURRENT_LEVEL] then
+        SPAWNX, SPAWNY = i*W + 20, j*H + 80
+        break
+      end
+    end
+  end
+
   Player.x = SPAWNX
   Player.y = SPAWNY
+  cam.y=Player.y//H * H
   Player.lives=9
   Player.state=ST.STAND
   ENTITIES = {Player, Flag}
@@ -648,7 +665,7 @@ function TICGame()
     update(e)
     animate(e)
     drawEnt(e,cam)
-    disposeFallen(e)
+    disposeFallen(e,cam)
   end
   cleanup(ENTITIES)
   for i,v in ipairs(bg) do
@@ -657,7 +674,7 @@ function TICGame()
   renderHud(Player)
   grab_object(Player)
   if isTouchSpikeTiles(Player) then die(Player) end
-  if Player.y > 200 then die(Player) end
+  if Player.y-cam.y > 200 then die(Player) end
   if intersect(Player, Flag) then mode=MOD_WIN end
   if Player.lives < 9 and not gotit then
     print("Press Z to grab dead body", 10-cam.x,124)
@@ -676,25 +693,71 @@ function TICWin()
   if btn(BTN_Z) then mode=MOD_GAME end
 end
 
+function initIntro()
+  LOGO_TO=1
+end
+
+function TICIntro()
+  cls(7)
+  spr(432, 88, 24, -1, 8)
+  print("CAT_IN_THE_DARK", 72, 108, 0)
+  LOGO_TO=LOGO_TO+1
+  local x,y,d = mouse()
+  if d then mode=MOD_GAME end
+  if btn(BTN_Z) then mode=MOD_GAME end
+  if btn(BTN_X) then mode=MOD_SELECT_LEVEL end
+  if LOGO_TO > 120 then mode=MOD_GAME end
+end
+
+CURRENT_LEVEL=1
+function initSelectLevel()
+  CURRENT_LEVEL=1
+end
+
+function TICSelectLevel()
+  cls(6)
+  local str = "Select level:"
+  local w = print(str, 0, -10)
+  print(str, W//2-w//2 + 1, H//2 + 1, 7)
+  print(str, W//2-w//2, H//2, 0)
+  str = sf("- %d -", CURRENT_LEVEL)
+  w = print(str, 0, -10)
+  print(str, W//2-w//2 + 1, H//2 + 1 + 10, 7)
+  print(str, W//2-w//2, H//2 + 10, 0)
+
+  if btnp(BTN_UP) then CURRENT_LEVEL = CURRENT_LEVEL + 1 end
+  if btnp(BTN_DOWN) then CURRENT_LEVEL = CURRENT_LEVEL - 1 end
+  if CURRENT_LEVEL > LEVELS then CURRENT_LEVEL = LEVELS end
+  if CURRENT_LEVEL < 1 then CURRENT_LEVEL = 1 end
+
+  if btn(BTN_Z) then mode=MOD_GAME end
+end
+
 -- game modes
 MOD_GAME=1
 MOD_FAIL=2
 MOD_WIN=3
+MOD_INTRO=4
+MOD_SELECT_LEVEL=5
 
 TICMode={
   [MOD_GAME]=TICGame,
   [MOD_FAIL]=TICFail,
-  [MOD_WIN]=TICWin
+  [MOD_WIN]=TICWin,
+  [MOD_INTRO]=TICIntro,
+  [MOD_SELECT_LEVEL]=TICSelectLevel
 }
 
 inits={
   [MOD_GAME]=initGame,
   [MOD_FAIL]=initFail,
-  [MOD_WIN]=initWin
+  [MOD_WIN]=initWin,
+  [MOD_INTRO]=initIntro,
+  [MOD_SELECT_LEVEL]=initSelectLevel
 }
 
 function init()
-  mode = MOD_GAME
+  mode = MOD_INTRO
 end
 
 init()
