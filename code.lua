@@ -1,3 +1,6 @@
+-- author: BOOtak
+-- name: Paw Noir
+
 T=8
 W=240
 H=136
