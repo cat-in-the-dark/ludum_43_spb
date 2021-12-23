@@ -666,6 +666,7 @@ function initGame()
   Player.y = SPAWNY
   Player.ctrl = true
   cam.y=Player.y//H * H
+  bg0.y,bg1.y=cam.y,cam.y+40
   Player.state=ST.STAND
   ENTITIES = {Player}
   SPAWNED_ENEMIES={}
